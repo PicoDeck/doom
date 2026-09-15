@@ -1,0 +1,4 @@
+main.elf
+*.debug
+*.o
+*.zip

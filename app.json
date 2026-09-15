@@ -1,0 +1,13 @@
+{
+    "id": "com.id.doom",
+    "name": "DOOM",
+    "description": "The classic first-person shooter.",
+    "type": "native",
+    "system_clock_khz": 300000,
+    "version": "1.0.0",
+    "requirements": ["audio"],
+    "category": "games",
+    "author": "PicOS",
+    "min_firmware": "0.1.0",
+    "homepage": "https://github.com/jeffory/picos-doom"
+}
