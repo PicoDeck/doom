@@ -16,8 +16,8 @@ extern unsigned char *I_VideoBuffer;
 // Big-endian RGB565 palette LUT - built by I_SetPalette in i_video.c
 extern uint16_t rgb565_be_palette[256];
 
-// --- Global PicOS state ---
-const PicoCalcAPI *g_picos_api;
+// --- Global PicoDeck state ---
+const PicoCalcAPI *g_picodeck_api;
 char g_app_dir[128];
 static const PicoCalcAPI *s_api;
 static bool s_show_fps = false;
@@ -33,7 +33,7 @@ jmp_buf g_exit_jmp;
 
 // --- Keys mapping ---
 typedef struct {
-    uint32_t picos_btn;
+    uint32_t picodeck_btn;
     unsigned char doom_key;
 } key_map_t;
 
@@ -180,11 +180,11 @@ int DG_GetKey(int* pressed, unsigned char* key) {
     uint32_t changed = current_buttons ^ last_buttons;
 
     if (changed) {
-        for (int i = 0; s_key_map[i].picos_btn != 0; i++) {
-            if (changed & s_key_map[i].picos_btn) {
-                *pressed = (current_buttons & s_key_map[i].picos_btn) ? 1 : 0;
+        for (int i = 0; s_key_map[i].picodeck_btn != 0; i++) {
+            if (changed & s_key_map[i].picodeck_btn) {
+                *pressed = (current_buttons & s_key_map[i].picodeck_btn) ? 1 : 0;
                 *key = s_key_map[i].doom_key;
-                last_buttons ^= s_key_map[i].picos_btn;
+                last_buttons ^= s_key_map[i].picodeck_btn;
                 return 1;
             }
         }
@@ -214,18 +214,18 @@ int DG_GetKey(int* pressed, unsigned char* key) {
 }
 
 void DG_SetWindowTitle(const char * title) {
-    // No window title in PicOS
+    // No window title in PicoDeck
 }
 
-// --- PicOS Entry Point ---
+// --- PicoDeck Entry Point ---
 
-void picos_main(const PicoCalcAPI *api,
+void picodeck_main(const PicoCalcAPI *api,
                 const char *app_dir,
                 const char *app_id,
                 const char *app_name)
 {
     s_api = api;
-    g_picos_api = api;
+    g_picodeck_api = api;
     strncpy(g_app_dir, app_dir, sizeof(g_app_dir) - 1);
     g_app_dir[sizeof(g_app_dir) - 1] = '\0';
 

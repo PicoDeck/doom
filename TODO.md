@@ -1,4 +1,4 @@
-# PicOS Audio / Memory / Performance Audit — TODO
+# PicoDeck Audio / Memory / Performance Audit — TODO
 
 Plan source: `~/.claude/plans/can-you-review-the-parallel-thunder.md`
 
@@ -37,7 +37,7 @@ Diagnostics added while chasing this (all in tree, worth keeping):
 ### 2. Audio completely broken — FEATURE_SOUND never compiled in (FIXED)
 
 `doomfeatures.h` (as vendored) contains only a commented-out
-`#undef FEATURE_SOUND` and nothing ever defined it, so `i_picos_sound.c`
+`#undef FEATURE_SOUND` and nothing ever defined it, so `i_picodeck_sound.c`
 compiled to an empty TU, `sound_modules[]` was empty, and Doom ran silent
 with zero errors. Fixed:
 - `-DFEATURE_SOUND` added to `apps/doom/Makefile`
@@ -53,7 +53,7 @@ On-hardware validation results (Phase-0 instrumentation):
   were also fixed: `-DOPL_CAPTURE` auto-started SD writes on the Core 1
   audio path, and `MUS_DEBUG_VOICE` printf'd per voice event / per render
   (both now off by default with warnings in Makefile / mus_player.c).
-- Interim: `-nomusic` added to argv in dg_picos.c — SFX-only audio is
+- Interim: `-nomusic` added to argv in dg_picodeck.c — SFX-only audio is
   clean. Music needs QMI quad-mode PSRAM (~4× bandwidth) or a lighter
   OPL core; see below.
 
@@ -66,8 +66,8 @@ On-hardware validation results (Phase-0 instrumentation):
   CODEWATCH snapshot arm/cleanup.
 - `src/os/launcher.c` — `psram_qmi_apply_timing()` QMI CLKDIV rescale.
 - `apps/doom/Makefile` — `-DFEATURE_SOUND`.
-- `apps/doom/i_picos_sound.c` — Phase-0 producer-side [DOOM-AUDIO] log.
-- `apps/doom/dg_picos.c` — first-3-frames render/flush breadcrumbs.
+- `apps/doom/i_picodeck_sound.c` — Phase-0 producer-side [DOOM-AUDIO] log.
+- `apps/doom/dg_picodeck.c` — first-3-frames render/flush breadcrumbs.
 - `apps/doom/src` (submodule) — i_video.c (rgb565 palette), i_system.c
   (MIN_RAM 2 MiB), i_sound.c (SDL_mixer guard). Needs a submodule commit +
   pointer bump.

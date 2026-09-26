@@ -1,4 +1,4 @@
-# PicOS DOOM (doomgeneric) Native App Build
+# PicoDeck DOOM (doomgeneric) Native App Build
 
 CC      = arm-none-eabi-gcc
 CFLAGS  = -mcpu=cortex-m33 -mthumb -std=gnu99 \
@@ -15,7 +15,7 @@ CFLAGS  = -mcpu=cortex-m33 -mthumb -std=gnu99 \
 #                    audio path; starves the mixer — never ship enabled)
 #   -DMUS_DEBUG    — per-voice/per-render MUS logging (same starvation issue)
 LDFLAGS = -T sdk/native/linker.ld \
-          -Wl,--entry=picos_main \
+          -Wl,--entry=picodeck_main \
           -Wl,-pie \
           -Wl,--gc-sections \
           -Wl,--no-warn-rwx-segments \
@@ -31,7 +31,7 @@ EXCLUDE_SRCS = src/doomgeneric/doomgeneric_%.c \
                src/doomgeneric/i_joystick.c
 
 DOOM_SRCS = $(filter-out $(EXCLUDE_SRCS), $(wildcard src/doomgeneric/*.c))
-SRCS    = dg_picos.c stubs.c i_picos_sound.c opl.c mus_player.c opl_capture.c $(DOOM_SRCS)
+SRCS    = dg_picodeck.c stubs.c i_picodeck_sound.c opl.c mus_player.c opl_capture.c $(DOOM_SRCS)
 
 TARGET  = main.elf
 

@@ -8,11 +8,11 @@
 #include <setjmp.h>
 #include "os.h"
 
-extern const PicoCalcAPI *g_picos_api;
+extern const PicoCalcAPI *g_picodeck_api;
 extern char g_app_dir[128];
 
 // --- Exit recovery ---
-// Defined in dg_picos.c — longjmp target so _exit() returns to picos_main()
+// Defined in dg_picodeck.c — longjmp target so _exit() returns to picodeck_main()
 // instead of spinning forever.
 extern jmp_buf g_exit_jmp;
 
@@ -44,12 +44,12 @@ static int  s_log_pos = 0;
 static void log_flush(void) {
     if (s_log_pos > 0) {
         s_log_buf[s_log_pos] = '\0';
-        g_picos_api->sys->log(s_log_buf);
+        g_picodeck_api->sys->log(s_log_buf);
         s_log_pos = 0;
     }
 }
 
-// --- File System Stubs (mapped to PicOS FS API) ---
+// --- File System Stubs (mapped to PicoDeck FS API) ---
 
 static pcfile_t g_fd_table[16] = {0};
 
@@ -62,13 +62,13 @@ int _open(const char *name, int flags, int mode) {
         full_path[sizeof(full_path) - 1] = '\0';
     }
 
-    const char *picos_mode = "rb";
-    if ((flags & 0x3) == 1) picos_mode = "wb";
-    else if ((flags & 0x3) == 2) picos_mode = "w+b";
+    const char *picodeck_mode = "rb";
+    if ((flags & 0x3) == 1) picodeck_mode = "wb";
+    else if ((flags & 0x3) == 2) picodeck_mode = "w+b";
 
     for (int i = 0; i < 16; i++) {
         if (g_fd_table[i] == NULL) {
-            g_fd_table[i] = g_picos_api->fs->open(full_path, picos_mode);
+            g_fd_table[i] = g_picodeck_api->fs->open(full_path, picodeck_mode);
             if (g_fd_table[i]) return i + 3;
             return -1;
         }
@@ -80,7 +80,7 @@ int _read(int file, char *ptr, int len) {
     if (file < 3) return 0;
     pcfile_t f = g_fd_table[file - 3];
     if (!f) return -1;
-    return g_picos_api->fs->read(f, ptr, len);
+    return g_picodeck_api->fs->read(f, ptr, len);
 }
 
 int _write(int file, char *ptr, int len) {
@@ -97,14 +97,14 @@ int _write(int file, char *ptr, int len) {
     if (file < 3) return -1;
     pcfile_t f = g_fd_table[file - 3];
     if (!f) return -1;
-    return g_picos_api->fs->write(f, ptr, len);
+    return g_picodeck_api->fs->write(f, ptr, len);
 }
 
 int _close(int file) {
     if (file < 3) return 0;
     pcfile_t f = g_fd_table[file - 3];
     if (!f) return -1;
-    g_picos_api->fs->close(f);
+    g_picodeck_api->fs->close(f);
     g_fd_table[file - 3] = NULL;
     return 0;
 }
@@ -114,16 +114,16 @@ int _lseek(int file, int ptr, int dir) {
     pcfile_t f = g_fd_table[file - 3];
     if (!f) return -1;
     uint32_t target = ptr;
-    if (dir == 1) target = g_picos_api->fs->tell(f) + ptr;
-    else if (dir == 2) target = g_picos_api->fs->fsize(f) + ptr;
-    g_picos_api->fs->seek(f, target);
-    return g_picos_api->fs->tell(f);
+    if (dir == 1) target = g_picodeck_api->fs->tell(f) + ptr;
+    else if (dir == 2) target = g_picodeck_api->fs->fsize(f) + ptr;
+    g_picodeck_api->fs->seek(f, target);
+    return g_picodeck_api->fs->tell(f);
 }
 
 int _fstat(int file, struct stat *st) {
     st->st_mode = S_IFREG;
     if (file < 3) st->st_mode = S_IFCHR;
-    st->st_size = (file >= 3 && g_fd_table[file-3]) ? g_picos_api->fs->fsize(g_fd_table[file-3]) : 0;
+    st->st_size = (file >= 3 && g_fd_table[file-3]) ? g_picodeck_api->fs->fsize(g_fd_table[file-3]) : 0;
     return 0;
 }
 
@@ -139,7 +139,7 @@ int _kill(int pid, int sig) { return -1; }
 void _exit(int status) {
     // Flush any buffered log output before leaving.
     log_flush();
-    // Jump back to picos_main's setjmp so the app returns cleanly to the
+    // Jump back to picodeck_main's setjmp so the app returns cleanly to the
     // launcher instead of spinning forever.
     longjmp(g_exit_jmp, status ? status : -1);
     // longjmp never returns, but the compiler needs this:

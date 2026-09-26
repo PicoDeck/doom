@@ -1,4 +1,4 @@
-// MUS music player for PicOS DOOM
+// MUS music player for PicoDeck DOOM
 // MUS sequencer + OPL2 synthesizer using Nuked-OPL3 in OPL2 mode
 //
 // Architecture:
@@ -7,7 +7,7 @@
 //
 // Call pattern:
 //   mus_tick()   - called from music_module->Poll() (after pushSamples)
-//   mus_render() - called from picos_snd_update() (before pushSamples)
+//   mus_render() - called from picodeck_snd_update() (before pushSamples)
 
 #ifndef MUS_PLAYER_H
 #define MUS_PLAYER_H
@@ -54,7 +54,7 @@ void        mus_tick_n(int n);
 
 // Render PCM samples into buffer (stereo interleaved int16_t)
 // count = number of stereo sample pairs
-// Called from picos_snd_update() before pushSamples
+// Called from picodeck_snd_update() before pushSamples
 void        mus_render(int16_t *buf, int count);
 
 #endif // MUS_PLAYER_H

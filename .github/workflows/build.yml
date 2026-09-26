@@ -27,14 +27,14 @@ jobs:
 
       - name: Package
         run: |
-          rm -f picos-doom-*.zip
-          zip -9 -r "picos-doom-${GITHUB_REF_NAME//\//-}.zip" app.json main.elf doom1.wad
+          rm -f picodeck-doom-*.zip
+          zip -9 -r "picodeck-doom-${GITHUB_REF_NAME//\//-}.zip" app.json main.elf doom1.wad
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: picos-doom
-          path: picos-doom-*.zip
+          name: picodeck-doom
+          path: picodeck-doom-*.zip
 
       - name: Check app.json version matches the tag
         if: startsWith(github.ref, 'refs/tags/v')
@@ -50,5 +50,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: picos-doom-*.zip
+          files: picodeck-doom-*.zip
           generate_release_notes: true

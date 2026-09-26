@@ -1,4 +1,4 @@
-// PicOS sound module for DOOM
+// PicoDeck sound module for DOOM
 // Software mixer: decodes DMX lumps, mixes 8 channels, outputs stereo PCM
 // via pushSamples() at 11025 Hz.
 //
@@ -26,7 +26,7 @@
 #include "os.h"
 #include "mus_player.h"
 
-extern const PicoCalcAPI *g_picos_api;
+extern const PicoCalcAPI *g_picodeck_api;
 
 // --- Output rate ---
 #define MIX_RATE        11025
@@ -96,7 +96,7 @@ static void compute_volumes(int vol, int sep, int *left, int *right)
 // they both access the OPL emulator state (s_mus.opl).  mus_tick_n() writes
 // OPL registers via OPL3_WriteRegBuffered, and mus_render() reads them via
 // OPL3_GenerateBatch.  Running these on different cores corrupts the OPL
-// state.  picos_mus_poll() is therefore a no-op; we call mus_tick_n() here.
+// state.  picodeck_mus_poll() is therefore a no-op; we call mus_tick_n() here.
 
 static void mix_chunk(int n)
 {
@@ -152,12 +152,12 @@ static void mix_chunk(int n)
         }
     }
 
-    g_picos_api->audio->pushSamples(s_mix_buf, n);
+    g_picodeck_api->audio->pushSamples(s_mix_buf, n);
 }
 
 static void doom_audio_worker(void)
 {
-    uint32_t now = (uint32_t)g_picos_api->sys->getTimeUs();
+    uint32_t now = (uint32_t)g_picodeck_api->sys->getTimeUs();
 
     // First call: seed the timestamp and return
     if (s_last_mix_us == 0) {
@@ -236,7 +236,7 @@ static void doom_audio_worker(void)
 
 // --- Sound module callbacks ---
 
-static boolean picos_snd_init(boolean use_sfx_prefix)
+static boolean picodeck_snd_init(boolean use_sfx_prefix)
 {
     memset(s_channels, 0, sizeof(s_channels));
     memset(s_channels_snapshot, 0, sizeof(s_channels_snapshot));
@@ -244,22 +244,22 @@ static boolean picos_snd_init(boolean use_sfx_prefix)
     s_next_seq = 1;
     s_last_mix_us = 0;
     s_mus_tick_accum = 0;
-    g_picos_api->audio->startStream(MIX_RATE);
+    g_picodeck_api->audio->startStream(MIX_RATE);
 
     // Register our worker on Core 1
-    g_picos_api->sys->setAudioCallback(doom_audio_worker);
+    g_picodeck_api->sys->setAudioCallback(doom_audio_worker);
 
     return true;
 }
 
-static void picos_snd_shutdown(void)
+static void picodeck_snd_shutdown(void)
 {
-    g_picos_api->sys->setAudioCallback(NULL);
+    g_picodeck_api->sys->setAudioCallback(NULL);
     s_last_mix_us = 0;
-    g_picos_api->audio->stopStream();
+    g_picodeck_api->audio->stopStream();
 }
 
-static int picos_snd_get_sfx_lump_num(sfxinfo_t *sfxinfo)
+static int picodeck_snd_get_sfx_lump_num(sfxinfo_t *sfxinfo)
 {
     char namebuf[16];
     snprintf(namebuf, sizeof(namebuf), "ds%s", sfxinfo->name);
@@ -272,12 +272,12 @@ static int picos_snd_get_sfx_lump_num(sfxinfo_t *sfxinfo)
 
 // Called on Core 0 every game tick (35Hz).  No-op: audio production is
 // autonomous on Core 1 via doom_audio_worker(), driven by wall-clock time.
-static void picos_snd_update(void)
+static void picodeck_snd_update(void)
 {
     // Nothing to do — Core 1 snapshots channels and mixes autonomously.
 }
 
-static void picos_snd_update_params(int channel, int vol, int sep)
+static void picodeck_snd_update_params(int channel, int vol, int sep)
 {
     if (channel < 0 || channel >= MIX_CHANNELS)
         return;
@@ -286,7 +286,7 @@ static void picos_snd_update_params(int channel, int vol, int sep)
                     &s_channels[channel].right_vol);
 }
 
-static int picos_snd_start(sfxinfo_t *sfxinfo, int channel, int vol, int sep)
+static int picodeck_snd_start(sfxinfo_t *sfxinfo, int channel, int vol, int sep)
 {
     if (channel < 0 || channel >= MIX_CHANNELS)
         return -1;
@@ -358,7 +358,7 @@ static int picos_snd_start(sfxinfo_t *sfxinfo, int channel, int vol, int sep)
     return channel;
 }
 
-static void picos_snd_stop(int channel)
+static void picodeck_snd_stop(int channel)
 {
     if (channel >= 0 && channel < MIX_CHANNELS) {
         s_channels[channel].active = false;
@@ -366,111 +366,111 @@ static void picos_snd_stop(int channel)
     }
 }
 
-static boolean picos_snd_is_playing(int channel)
+static boolean picodeck_snd_is_playing(int channel)
 {
     if (channel >= 0 && channel < MIX_CHANNELS)
         return s_channels[channel].active;
     return false;
 }
 
-static void picos_snd_cache_sounds(sfxinfo_t *sounds, int num_sounds)
+static void picodeck_snd_cache_sounds(sfxinfo_t *sounds, int num_sounds)
 {
     // Lazy cache in StartSound — no-op here
 }
 
 // --- Sound module definition ---
 
-static snddevice_t picos_snd_devices[] = { SNDDEVICE_SB };
+static snddevice_t picodeck_snd_devices[] = { SNDDEVICE_SB };
 
 sound_module_t DG_sound_module = {
-    picos_snd_devices,
-    sizeof(picos_snd_devices) / sizeof(*picos_snd_devices),
-    picos_snd_init,
-    picos_snd_shutdown,
-    picos_snd_get_sfx_lump_num,
-    picos_snd_update,
-    picos_snd_update_params,
-    picos_snd_start,
-    picos_snd_stop,
-    picos_snd_is_playing,
-    picos_snd_cache_sounds,
+    picodeck_snd_devices,
+    sizeof(picodeck_snd_devices) / sizeof(*picodeck_snd_devices),
+    picodeck_snd_init,
+    picodeck_snd_shutdown,
+    picodeck_snd_get_sfx_lump_num,
+    picodeck_snd_update,
+    picodeck_snd_update_params,
+    picodeck_snd_start,
+    picodeck_snd_stop,
+    picodeck_snd_is_playing,
+    picodeck_snd_cache_sounds,
 };
 
 // --- Music module (OPL2 via Nuked-OPL3) ---
 
-static boolean picos_mus_init(void)
+static boolean picodeck_mus_init(void)
 {
     mus_init();
     return true;
 }
 
-static void picos_mus_shutdown(void)
+static void picodeck_mus_shutdown(void)
 {
     mus_shutdown();
 }
 
-static void picos_mus_set_volume(int volume)
+static void picodeck_mus_set_volume(int volume)
 {
     mus_set_volume(volume);
 }
 
-static void picos_mus_pause(void)
+static void picodeck_mus_pause(void)
 {
     mus_pause();
 }
 
-static void picos_mus_resume(void)
+static void picodeck_mus_resume(void)
 {
     mus_resume();
 }
 
-static void *picos_mus_register(void *data, int len)
+static void *picodeck_mus_register(void *data, int len)
 {
     return mus_register(data, len);
 }
 
-static void picos_mus_unregister(void *handle)
+static void picodeck_mus_unregister(void *handle)
 {
     mus_unregister((mus_song_t *)handle);
 }
 
-static void picos_mus_play(void *handle, boolean looping)
+static void picodeck_mus_play(void *handle, boolean looping)
 {
     mus_play((mus_song_t *)handle, looping);
 }
 
-static void picos_mus_stop(void)
+static void picodeck_mus_stop(void)
 {
     mus_stop();
 }
 
-static boolean picos_mus_is_playing(void)
+static boolean picodeck_mus_is_playing(void)
 {
     return mus_is_playing();
 }
 
-static void picos_mus_poll(void)
+static void picodeck_mus_poll(void)
 {
     // No-op: mus_tick() is called from doom_audio_worker() on Core 1
     // to keep all OPL access on a single core (see comment above worker).
 }
 
-static snddevice_t picos_mus_devices[] = { SNDDEVICE_SB, SNDDEVICE_ADLIB, SNDDEVICE_GENMIDI };
+static snddevice_t picodeck_mus_devices[] = { SNDDEVICE_SB, SNDDEVICE_ADLIB, SNDDEVICE_GENMIDI };
 
 music_module_t DG_music_module = {
-    picos_mus_devices,
-    sizeof(picos_mus_devices) / sizeof(*picos_mus_devices),
-    picos_mus_init,
-    picos_mus_shutdown,
-    picos_mus_set_volume,
-    picos_mus_pause,
-    picos_mus_resume,
-    picos_mus_register,
-    picos_mus_unregister,
-    picos_mus_play,
-    picos_mus_stop,
-    picos_mus_is_playing,
-    picos_mus_poll,
+    picodeck_mus_devices,
+    sizeof(picodeck_mus_devices) / sizeof(*picodeck_mus_devices),
+    picodeck_mus_init,
+    picodeck_mus_shutdown,
+    picodeck_mus_set_volume,
+    picodeck_mus_pause,
+    picodeck_mus_resume,
+    picodeck_mus_register,
+    picodeck_mus_unregister,
+    picodeck_mus_play,
+    picodeck_mus_stop,
+    picodeck_mus_is_playing,
+    picodeck_mus_poll,
 };
 
 // --- Required globals for I_BindSoundVariables ---

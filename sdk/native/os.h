@@ -13,7 +13,7 @@
 // apps borrow it through here.
 //
 // In Lua, this is exposed as the `picocalc` global module.
-// In C, a pointer to this struct is passed to picos_main() by the native loader.
+// In C, a pointer to this struct is passed to picodeck_main() by the native loader.
 // =============================================================================
 
 // --- Input ------------------------------------------------------------------
@@ -208,7 +208,7 @@ typedef struct {
     void     (*poll)(void);
     // Returns true (once) after the user selects "Exit App" from the system
     // menu.  Native apps should check this each frame and return from
-    // picos_main() when it fires.
+    // picodeck_main() when it fires.
     bool     (*shouldExit)(void);
     // Register a callback to be called on Core 1 every 5ms, alongside
     // audio updates.  Used by native apps (e.g. DOOM) to offload audio
@@ -269,6 +269,12 @@ typedef enum {
     TCP_CB_FAILED   = (1 << 4),
 } tcp_event_t;
 
+// connectEx() flags (API version 8).
+#define PCTCP_TLS          (1u << 0)  // TLS; the server certificate is verified
+                                      // against the OS root bundle + host name
+#define PCTCP_TLS_INSECURE (1u << 1)  // with PCTCP_TLS: skip verification
+                                      // (self-signed dev servers only)
+
 typedef struct {
     // Open a TCP connection to host:port. Non-blocking.
     pctcp_t (*connect)(const char *host, uint16_t port, bool use_ssl);
@@ -276,7 +282,8 @@ typedef struct {
     int     (*write)(pctcp_t c, const void *buf, int len);
     // Read data from the connection. Returns bytes read or 0 if none available.
     int     (*read)(pctcp_t c, void *buf, int len);
-    // Close the connection.
+    // Close the connection and release it; the handle is invalid afterwards
+    // (the slot returns to the pool once Core 1 has let go of it).
     void    (*close)(pctcp_t c);
     // Returns number of bytes available for reading.
     int     (*available)(pctcp_t c);
@@ -284,6 +291,11 @@ typedef struct {
     const char * (*getError)(pctcp_t c);
     // Returns bitmask of pending events (TCP_CB_*).
     uint32_t (*getEvents)(pctcp_t c);
+    // --- API version 8 ---
+    // connect() with PCTCP_* flags. A TLS socket reports TCP_CB_CONNECT only
+    // once the handshake (and certificate check) has succeeded; a TLS
+    // connect before SNTP has set the clock fails with "clock not set".
+    pctcp_t (*connectEx)(const char *host, uint16_t port, uint32_t flags);
 } picocalc_tcp_t;
 
 // --- UI Widgets -------------------------------------------------------------
@@ -360,6 +372,12 @@ typedef struct {
     // Returns true when the request has completed (success or failure).
     // Use getStatus()/getError() to determine outcome.
     bool  (*isComplete)(pchttp_t c);
+    // --- API version 8 ---
+    // HTTPS verifies the server certificate (OS root bundle + host name) and
+    // refuses to connect until SNTP has set the clock ("clock not set").
+    // setInsecure(c, true) before get()/post() skips both — for self-signed
+    // development servers only.
+    void  (*setInsecure)(pchttp_t c, bool insecure);
 } picocalc_http_t;
 
 // --- Sound Player -----------------------------------------------------------
@@ -376,7 +394,7 @@ typedef struct {
     // Load a sample from a file. Returns NULL on failure.
     pcsound_sample_t (*sampleLoad)(const char *path);
     // Free a loaded sample.
-    void  (*sampleFree)(pcsound_sample_t s);
+    void  (*sampleFree)(pcsound_sample_t s);   // stops + detaches any player using it
 
     // --- Sample player ---
     // Create a new player instance. Returns NULL on OOM.
@@ -386,9 +404,9 @@ typedef struct {
     void     (*playerStop)(pcsound_player_t p);
     bool     (*playerIsPlaying)(pcsound_player_t p);
     uint8_t  (*playerGetVolume)(pcsound_player_t p);
-    void     (*playerSetVolume)(pcsound_player_t p, uint8_t vol);   // 0–255
+    void     (*playerSetVolume)(pcsound_player_t p, uint8_t vol);   // 0–100
     void     (*playerSetLoop)(pcsound_player_t p, bool loop);
-    void     (*playerFree)(pcsound_player_t p);
+    void     (*playerFree)(pcsound_player_t p);   // never frees the player's sample
 
     // --- File player (streaming from SD card) ---
     pcfileplayer_t (*filePlayerNew)(void);
@@ -398,7 +416,7 @@ typedef struct {
     void     (*filePlayerPause)(pcfileplayer_t fp);
     void     (*filePlayerResume)(pcfileplayer_t fp);
     bool     (*filePlayerIsPlaying)(pcfileplayer_t fp);
-    void     (*filePlayerSetVolume)(pcfileplayer_t fp, uint8_t vol);  // sets both L/R channels to same value
+    void     (*filePlayerSetVolume)(pcfileplayer_t fp, uint8_t vol);  // 0-100 (clamped), both L/R channels
     uint8_t  (*filePlayerGetVolume)(pcfileplayer_t fp);
     uint32_t (*filePlayerGetOffset)(pcfileplayer_t fp);
     void     (*filePlayerSetOffset)(pcfileplayer_t fp, uint32_t pos);
@@ -413,7 +431,7 @@ typedef struct {
     void     (*mp3PlayerPause)(pcmp3player_t mp);
     void     (*mp3PlayerResume)(pcmp3player_t mp);
     bool     (*mp3PlayerIsPlaying)(pcmp3player_t mp);
-    void     (*mp3PlayerSetVolume)(pcmp3player_t mp, uint8_t vol);
+    void     (*mp3PlayerSetVolume)(pcmp3player_t mp, uint8_t vol);  // 0-100 (clamped)
     uint8_t  (*mp3PlayerGetVolume)(pcmp3player_t mp);
     void     (*mp3PlayerSetLoop)(pcmp3player_t mp, bool loop);
     void     (*mp3PlayerFree)(pcmp3player_t mp);
@@ -421,11 +439,14 @@ typedef struct {
 
 // --- App Config -------------------------------------------------------------
 // Per-app key/value config persisted at /data/<APP_ID>/config.json.
-// load() is called by the launcher before app start. Max 4 keys, 32-char keys,
+// Nothing loads it for a native app: the store is unbound at every app start
+// and exit, so call load() with your own id first. Max 4 keys, 32-char keys,
 // 256-char values.
 
 typedef struct {
-    // Load config for the given app_id. Called by launcher automatically.
+    // Bind and load the running app's own config. Only the running app's id
+    // is accepted (case-insensitive); another app's id returns false and
+    // leaves the binding unchanged. Not called for you by the launcher.
     bool        (*load)(const char *app_id);
     // Save in-memory config to /data/<APP_ID>/config.json.
     bool        (*save)(void);
@@ -456,8 +477,11 @@ typedef struct {
                        const uint8_t *data, uint32_t dlen, uint8_t out[32]);
     void (*hmacSha1)(const uint8_t *key, uint32_t klen,
                      const uint8_t *data, uint32_t dlen, uint8_t out[20]);
-    // Fill buf with cryptographically random bytes.
-    void (*randomBytes)(uint8_t *buf, uint32_t len);
+    // Fill buf with cryptographically random bytes.  False (buf zeroed) when
+    // there is no seeded, working DRBG: never use the bytes then.  (Returned
+    // since 2026-09; the slot and calling convention are unchanged, so older
+    // apps that ignore the result still link and run.)
+    bool (*randomBytes)(uint8_t *buf, uint32_t len);
     // SSH session-key derivation (RFC 4253 §7.2). letter = 'A'–'F'.
     // K = shared secret mpint, H = exchange hash, session_id = initial H.
     void (*deriveKey)(char letter,
@@ -647,6 +671,8 @@ typedef struct PicoCalcAPI {
                                              // 4=clip rect + mode-7 plane + display parity
                                              // 5=zip read-in-place handles
                                              // 7=video time seek/position, OSD, hasEnded
+                                             // 8=TLS verification: http->setInsecure,
+                                             //   tcp->connectEx
 } PicoCalcAPI;
 
 // The global API instance, populated during os_init()

@@ -1,4 +1,4 @@
-// MUS music player for PicOS DOOM
+// MUS music player for PicoDeck DOOM
 // MUS sequencer + OPL2 (Nuked-OPL3) synthesizer
 //
 // References:

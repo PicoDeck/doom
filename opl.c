@@ -1,4 +1,4 @@
-// Nuked OPL3 emulator - OPL2-mode subset for DOOM music on PicOS
+// Nuked OPL3 emulator - OPL2-mode subset for DOOM music on PicoDeck
 // Based on Nuked OPL3 v1.8 by Nuke.YKT (Alexey Khokholov)
 // https://github.com/nukeykt/Nuked-OPL3
 //
