@@ -28,7 +28,7 @@ jobs:
       - name: Package
         run: |
           rm -f picodeck-doom-*.zip
-          zip -9 -r "picodeck-doom-${GITHUB_REF_NAME//\//-}.zip" app.json main.elf doom1.wad
+          zip -9 -r "picodeck-doom-${GITHUB_REF_NAME//\//-}.zip" app.json main.elf doom1.wad icon.png
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
