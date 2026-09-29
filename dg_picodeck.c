@@ -20,7 +20,6 @@ extern uint16_t rgb565_be_palette[256];
 const PicoCalcAPI *g_picodeck_api;
 char g_app_dir[128];
 static const PicoCalcAPI *s_api;
-static bool s_show_fps = false;
 static uint32_t s_last_gametic = 0;
 
 // longjmp target for _exit() — lets DOOM's exit()/I_Error() return to the
@@ -139,10 +138,6 @@ void DG_DrawFrame() {
 
         if (diag) s_api->sys->log("DOOM: render done");
 
-        if (s_show_fps) {
-            s_api->perf->drawFPS(250, 8);
-        }
-
         // Flush only the active region (rows 59-260 with margin) instead of full 320x320.
         // This reduces DMA transfer by ~38% (64K pixels vs 102K pixels).
         if (diag) s_api->sys->log("DOOM: flush begin");
@@ -260,11 +255,6 @@ void picodeck_main(const PicoCalcAPI *api,
     // Main game loop — doomgeneric expects the platform to drive ticks
     while (!api->sys->shouldExit()) {
         api->sys->poll();
-
-        // Toggle FPS with F3
-        if (api->input->getButtonsPressed() & BTN_F3) {
-            s_show_fps = !s_show_fps;
-        }
 
         doomgeneric_Tick();
     }
