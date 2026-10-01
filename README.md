@@ -16,6 +16,16 @@ PicoDeck for a 300 MHz core clock via `system_clock_khz` in `app.json`.
 DOOM is on the **PicoDeck App Store**. Open the Store app on your PicoCalc and install
 it from there.
 
+## Controls
+
+On PicoDeck firmware with the gamepad API (version 9) the game follows the
+bindings in Settings -> Controls. Defaults: arrows move and turn, A (F4) fires,
+B (F5) uses and opens doors, L/R (F2/F3) strafe, X/Y (Delete/Backspace) select
+the next/previous weapon, Select (Tab) is the map, Start (F1) and Esc open
+Doom's menu. Enter, Shift, Ctrl and the number keys (weapons) stay on the
+keyboard. Older firmware keeps the old layout: F4 fire, F5 use, F1-F3 weapons
+1-3.
+
 ## Build
 
 Needs `arm-none-eabi-gcc` (tested with 15.2) and a newlib for ARM:

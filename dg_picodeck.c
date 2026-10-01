@@ -31,30 +31,69 @@ jmp_buf g_exit_jmp;
 #define DOOM_Y_END 259
 
 // --- Keys mapping ---
-typedef struct {
-    uint32_t picodeck_btn;
-    unsigned char doom_key;
-} key_map_t;
-
 // doomgeneric uses its own key codes in doomkeys.h
 #include "doomkeys.h"
 
-static const key_map_t s_key_map[] = {
-    {BTN_UP,    KEY_UPARROW},
-    {BTN_DOWN,  KEY_DOWNARROW},
-    {BTN_LEFT,  KEY_LEFTARROW},
-    {BTN_RIGHT, KEY_RIGHTARROW},
-    {BTN_ENTER, KEY_ENTER},
-    {BTN_ESC,   KEY_ESCAPE},
-    {BTN_CTRL,  KEY_RCTRL},
-    {BTN_SHIFT, KEY_RSHIFT},
-    {BTN_TAB,   KEY_TAB},
-    {BTN_F4,    KEY_FIRE},
-    {BTN_F5,    KEY_USE},
-    {BTN_F1,    '1'},
-    {BTN_F2,    '2'},
-    {BTN_F3,    '3'},
-    {0, 0}
+// Doom's weapon cycling keys: the engine has them, unbound by default.
+extern int key_nextweapon;
+extern int key_prevweapon;
+// Virtual codes no keyboard produces (NUMKEYS is 256).
+#define KEY_WEAPON_NEXT 0xb0
+#define KEY_WEAPON_PREV 0xb1
+
+// Input sources feed one set of Doom keys, so a key held on both the keyboard
+// and the gamepad (arrows) reports one press and one release.
+typedef enum { SRC_KBD, SRC_PAD } src_t;
+
+typedef struct {
+    src_t src;
+    uint32_t mask;          // BTN_* (SRC_KBD) or PAD_* (SRC_PAD)
+    unsigned char doom_key;
+} key_map_t;
+
+// Always read from the keyboard (the keys no gamepad button covers).
+static const key_map_t s_kbd_map[] = {
+    {SRC_KBD, BTN_ENTER, KEY_ENTER},
+    {SRC_KBD, BTN_ESC,   KEY_ESCAPE},
+    {SRC_KBD, BTN_CTRL,  KEY_RCTRL},
+    {SRC_KBD, BTN_SHIFT, KEY_RSHIFT},
+    {SRC_KBD, BTN_TAB,   KEY_TAB},
+    {0, 0, 0}
+};
+
+// Firmware with the gamepad (api->version >= 9): gameplay follows the player's
+// bindings (Settings -> Controls). Defaults: A = F4 fire, B = F5 use, L/R =
+// F2/F3 strafe, X/Y = Delete/Backspace next/previous weapon, Start = F1 menu,
+// Select = Tab map, D-pad = arrows. The keys the pad owns are not read from
+// the keyboard, so a rebinding moves them rather than adding to them.
+static const key_map_t s_pad_map[] = {
+    {SRC_PAD, PAD_UP,     KEY_UPARROW},
+    {SRC_PAD, PAD_DOWN,   KEY_DOWNARROW},
+    {SRC_PAD, PAD_LEFT,   KEY_LEFTARROW},
+    {SRC_PAD, PAD_RIGHT,  KEY_RIGHTARROW},
+    {SRC_PAD, PAD_A,      KEY_FIRE},
+    {SRC_PAD, PAD_B,      KEY_USE},
+    {SRC_PAD, PAD_L,      KEY_STRAFE_L},
+    {SRC_PAD, PAD_R,      KEY_STRAFE_R},
+    {SRC_PAD, PAD_X,      KEY_WEAPON_NEXT},
+    {SRC_PAD, PAD_Y,      KEY_WEAPON_PREV},
+    {SRC_PAD, PAD_START,  KEY_ESCAPE},
+    {SRC_PAD, PAD_SELECT, KEY_TAB},
+    {0, 0, 0}
+};
+
+// Older firmware: the fixed keys the port always used.
+static const key_map_t s_legacy_map[] = {
+    {SRC_KBD, BTN_UP,    KEY_UPARROW},
+    {SRC_KBD, BTN_DOWN,  KEY_DOWNARROW},
+    {SRC_KBD, BTN_LEFT,  KEY_LEFTARROW},
+    {SRC_KBD, BTN_RIGHT, KEY_RIGHTARROW},
+    {SRC_KBD, BTN_F4,    KEY_FIRE},
+    {SRC_KBD, BTN_F5,    KEY_USE},
+    {SRC_KBD, BTN_F1,    '1'},
+    {SRC_KBD, BTN_F2,    '2'},
+    {SRC_KBD, BTN_F3,    '3'},
+    {0, 0, 0}
 };
 
 // Map ASCII characters to DOOM key codes where needed.
@@ -169,17 +208,45 @@ uint32_t DG_GetTicksMs() {
     return now;
 }
 
-int DG_GetKey(int* pressed, unsigned char* key) {
-    static uint32_t last_buttons = 0;
-    uint32_t current_buttons = s_api->input->getButtons();
-    uint32_t changed = current_buttons ^ last_buttons;
+static bool use_gamepad(void) {
+    return s_api->version >= 9 && s_api->gamepad;
+}
 
+static uint32_t held_doom_keys(unsigned char *keys, int *nkeys) {
+    uint32_t kbd = s_api->input->getButtons();
+    uint32_t pad = use_gamepad() ? s_api->gamepad->getButtons() : 0;
+    const key_map_t *maps[3] = {
+        s_kbd_map, use_gamepad() ? s_pad_map : s_legacy_map, NULL};
+    uint32_t held = 0;
+    *nkeys = 0;
+    for (int m = 0; maps[m]; m++) {
+        for (const key_map_t *e = maps[m]; e->mask; e++) {
+            int idx = -1;
+            for (int i = 0; i < *nkeys; i++)
+                if (keys[i] == e->doom_key) { idx = i; break; }
+            if (idx < 0) idx = (*nkeys)++, keys[idx] = e->doom_key;
+            uint32_t cur = (e->src == SRC_PAD) ? pad : kbd;
+            if (cur & e->mask) held |= 1u << idx;
+        }
+    }
+    return held;
+}
+
+int DG_GetKey(int* pressed, unsigned char* key) {
+    // Doom wants one event per call: report the first key whose state differs
+    // from what Doom was last told. The key list is rebuilt in a fixed order
+    // each call, so the bit positions are stable.
+    static uint32_t last_held = 0;
+    unsigned char keys[32];
+    int nkeys;
+    uint32_t held = held_doom_keys(keys, &nkeys);
+    uint32_t changed = held ^ last_held;
     if (changed) {
-        for (int i = 0; s_key_map[i].picodeck_btn != 0; i++) {
-            if (changed & s_key_map[i].picodeck_btn) {
-                *pressed = (current_buttons & s_key_map[i].picodeck_btn) ? 1 : 0;
-                *key = s_key_map[i].doom_key;
-                last_buttons ^= s_key_map[i].picodeck_btn;
+        for (int i = 0; i < nkeys; i++) {
+            if (changed & (1u << i)) {
+                *pressed = (held >> i) & 1;
+                *key = keys[i];
+                last_held ^= 1u << i;
                 return 1;
             }
         }
@@ -251,6 +318,11 @@ void picodeck_main(const PicoCalcAPI *api,
 
     // Initialize DOOM (runs one tick internally, then returns)
     doomgeneric_Create(5, argv);
+
+    // Weapon cycling is unbound in Doom; the gamepad's X/Y drive it. Set after
+    // the config load so a saved default.cfg cannot unbind them.
+    key_nextweapon = KEY_WEAPON_NEXT;
+    key_prevweapon = KEY_WEAPON_PREV;
 
     // Main game loop — doomgeneric expects the platform to drive ticks
     while (!api->sys->shouldExit()) {
