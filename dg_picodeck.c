@@ -37,6 +37,14 @@ jmp_buf g_exit_jmp;
 // Doom's weapon cycling keys: the engine has them, unbound by default.
 extern int key_nextweapon;
 extern int key_prevweapon;
+// Gameplay and menu key bindings (m_controls.c) and menu state (m_menu.c).
+extern int key_up, key_down, key_left, key_right;
+extern int key_fire, key_use, key_strafeleft, key_straferight;
+extern int key_menu_forward, key_menu_back, key_menu_confirm;
+// (Doom's `boolean` is a 4-byte enum; it clashes with stdbool here.)
+extern uint32_t menuactive;
+extern int messageToPrint;
+extern uint32_t messageNeedsInput;
 // Virtual codes no keyboard produces (NUMKEYS is 256).
 #define KEY_WEAPON_NEXT 0xb0
 #define KEY_WEAPON_PREV 0xb1
@@ -64,8 +72,11 @@ static const key_map_t s_kbd_map[] = {
 // Firmware with the gamepad (api->version >= 9): gameplay follows the player's
 // bindings (Settings -> Controls). Defaults: A = F4 fire, B = F5 use, L/R =
 // F2/F3 strafe, X/Y = Delete/Backspace next/previous weapon, Start = F1 menu,
-// Select = Tab map, D-pad = arrows. The keys the pad owns are not read from
-// the keyboard, so a rebinding moves them rather than adding to them.
+// Select = Tab map, D-pad = arrows. The arrows, F1-F5 and the other keys the
+// pad owns are not read from the keyboard, so a rebinding moves them. Tab
+// (Select's default) and Esc (Start's) are also in s_kbd_map: they stay on the
+// keyboard whatever the bindings, so rebinding those two adds a key.
+// A and B also drive Doom's menu (see held_doom_keys).
 static const key_map_t s_pad_map[] = {
     {SRC_PAD, PAD_UP,     KEY_UPARROW},
     {SRC_PAD, PAD_DOWN,   KEY_DOWNARROW},
@@ -212,9 +223,27 @@ static bool use_gamepad(void) {
     return s_api->version >= 9 && s_api->gamepad;
 }
 
+// A press of A or B that began while Doom's menu was up drives the menu
+// (Enter, or 'y' at a yes/no prompt; the menu's back key) until released, and
+// is not also fire or use. One that began in the game stays fire or use, so
+// fire held and then Start does not select New Game.
+static bool s_a_menu, s_b_menu, s_a_prompt, s_prev_a, s_prev_b;
+
 static uint32_t held_doom_keys(unsigned char *keys, int *nkeys) {
     uint32_t kbd = s_api->input->getButtons();
     uint32_t pad = use_gamepad() ? s_api->gamepad->getButtons() : 0;
+    bool a = pad & PAD_A, b = pad & PAD_B;
+    if (a && !s_prev_a) {
+        s_a_menu = menuactive;
+        s_a_prompt = messageToPrint && messageNeedsInput;
+    }
+    if (b && !s_prev_b) s_b_menu = menuactive;
+    if (!a) s_a_menu = false;
+    if (!b) s_b_menu = false;
+    s_prev_a = a;
+    s_prev_b = b;
+    if (s_a_menu) pad &= ~PAD_A;
+    if (s_b_menu) pad &= ~PAD_B;
     const key_map_t *maps[3] = {
         s_kbd_map, use_gamepad() ? s_pad_map : s_legacy_map, NULL};
     uint32_t held = 0;
@@ -228,6 +257,19 @@ static uint32_t held_doom_keys(unsigned char *keys, int *nkeys) {
             uint32_t cur = (e->src == SRC_PAD) ? pad : kbd;
             if (cur & e->mask) held |= 1u << idx;
         }
+    }
+    // The menu keys, at Doom's configured values, in fixed slots.
+    const struct { int key; bool on; } menu[3] = {
+        {key_menu_forward, s_a_menu && !s_a_prompt},
+        {key_menu_confirm, s_a_menu && s_a_prompt},
+        {key_menu_back,    s_b_menu},
+    };
+    for (int m = 0; m < 3; m++) {
+        int idx = -1;
+        for (int i = 0; i < *nkeys; i++)
+            if (keys[i] == menu[m].key) { idx = i; break; }
+        if (idx < 0) idx = (*nkeys)++, keys[idx] = (unsigned char)menu[m].key;
+        if (menu[m].on) held |= 1u << idx;
     }
     return held;
 }
@@ -323,6 +365,14 @@ void picodeck_main(const PicoCalcAPI *api,
     // the config load so a saved default.cfg cannot unbind them.
     key_nextweapon = KEY_WEAPON_NEXT;
     key_prevweapon = KEY_WEAPON_PREV;
+    // The gamepad emits Doom's stock key codes for the actions below: force
+    // the bindings to match, so a hand-edited default.cfg cannot break
+    // A/B/L/R or the D-pad.
+    key_up = KEY_UPARROW;       key_down = KEY_DOWNARROW;
+    key_left = KEY_LEFTARROW;   key_right = KEY_RIGHTARROW;
+    key_fire = KEY_FIRE;        key_use = KEY_USE;
+    key_strafeleft = KEY_STRAFE_L;
+    key_straferight = KEY_STRAFE_R;
 
     // Main game loop — doomgeneric expects the platform to drive ticks
     while (!api->sys->shouldExit()) {

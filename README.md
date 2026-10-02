@@ -21,10 +21,13 @@ it from there.
 On PicoDeck firmware with the gamepad API (version 9) the game follows the
 bindings in Settings -> Controls. Defaults: arrows move and turn, A (F4) fires,
 B (F5) uses and opens doors, L/R (F2/F3) strafe, X/Y (Delete/Backspace) select
-the next/previous weapon, Select (Tab) is the map, Start (F1) and Esc open
-Doom's menu. Enter, Shift, Ctrl and the number keys (weapons) stay on the
-keyboard. Older firmware keeps the old layout: F4 fire, F5 use, F1-F3 weapons
-1-3.
+the next/previous weapon, Select (Tab) is the map, Start (F1) opens Doom's
+menu. In Doom's menu A confirms (Enter, or yes at a yes/no prompt) and B goes
+back (it also erases in a save name), so the menu works from the controller
+alone; a press that began in the game stays fire or use. Esc and Tab always
+work as well as Start and Select, so rebinding those two adds a key. Enter,
+Shift and the number keys (weapons) stay on the keyboard. Older firmware keeps
+the old layout: F4 fire, F5 use, F1-F3 weapons 1-3.
 
 ## Build
 
