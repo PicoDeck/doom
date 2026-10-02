@@ -40,7 +40,9 @@ extern int key_prevweapon;
 // Gameplay and menu key bindings (m_controls.c) and menu state (m_menu.c).
 extern int key_up, key_down, key_left, key_right;
 extern int key_fire, key_use, key_strafeleft, key_straferight;
-extern int key_menu_forward, key_menu_back, key_menu_confirm;
+extern int key_menu_forward, key_menu_back, key_menu_confirm, key_menu_abort;
+extern int key_speed, key_map_toggle, key_menu_activate;
+extern int key_menu_up, key_menu_down, key_menu_left, key_menu_right;
 // (Doom's `boolean` is a 4-byte enum; it clashes with stdbool here.)
 extern uint32_t menuactive;
 extern int messageToPrint;
@@ -227,7 +229,7 @@ static bool use_gamepad(void) {
 // (Enter, or 'y' at a yes/no prompt; the menu's back key) until released, and
 // is not also fire or use. One that began in the game stays fire or use, so
 // fire held and then Start does not select New Game.
-static bool s_a_menu, s_b_menu, s_a_prompt, s_prev_a, s_prev_b;
+static bool s_a_menu, s_b_menu, s_a_prompt, s_b_prompt, s_prev_a, s_prev_b;
 
 static uint32_t held_doom_keys(unsigned char *keys, int *nkeys) {
     uint32_t kbd = s_api->input->getButtons();
@@ -237,7 +239,10 @@ static uint32_t held_doom_keys(unsigned char *keys, int *nkeys) {
         s_a_menu = menuactive;
         s_a_prompt = messageToPrint && messageNeedsInput;
     }
-    if (b && !s_prev_b) s_b_menu = menuactive;
+    if (b && !s_prev_b) {
+        s_b_menu = menuactive;
+        s_b_prompt = messageToPrint && messageNeedsInput;  // B answers No
+    }
     if (!a) s_a_menu = false;
     if (!b) s_b_menu = false;
     s_prev_a = a;
@@ -259,12 +264,13 @@ static uint32_t held_doom_keys(unsigned char *keys, int *nkeys) {
         }
     }
     // The menu keys, at Doom's configured values, in fixed slots.
-    const struct { int key; bool on; } menu[3] = {
+    const struct { int key; bool on; } menu[4] = {
         {key_menu_forward, s_a_menu && !s_a_prompt},
         {key_menu_confirm, s_a_menu && s_a_prompt},
-        {key_menu_back,    s_b_menu},
+        {key_menu_back,    s_b_menu && !s_b_prompt},
+        {key_menu_abort,   s_b_menu && s_b_prompt},
     };
-    for (int m = 0; m < 3; m++) {
+    for (int m = 0; m < 4; m++) {
         int idx = -1;
         for (int i = 0; i < *nkeys; i++)
             if (keys[i] == menu[m].key) { idx = i; break; }
@@ -373,6 +379,12 @@ void picodeck_main(const PicoCalcAPI *api,
     key_fire = KEY_FIRE;        key_use = KEY_USE;
     key_strafeleft = KEY_STRAFE_L;
     key_straferight = KEY_STRAFE_R;
+    // Keys the keyboard and pad maps emit that a config could rebind: Shift
+    // (run), Tab (map), Esc and the arrows (menu).
+    key_speed = KEY_RSHIFT;     key_map_toggle = KEY_TAB;
+    key_menu_activate = KEY_ESCAPE;
+    key_menu_up = KEY_UPARROW;  key_menu_down = KEY_DOWNARROW;
+    key_menu_left = KEY_LEFTARROW; key_menu_right = KEY_RIGHTARROW;
 
     // Main game loop — doomgeneric expects the platform to drive ticks
     while (!api->sys->shouldExit()) {
