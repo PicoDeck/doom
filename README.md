@@ -45,6 +45,15 @@ are vendored in `sdk/native/`.
 `tools/opl_replay.c` is a desktop tool that renders an `.opcl` OPL capture to WAV
 for checking the music emulation; its build line is in the file header.
 
+### Browser build
+
+`make main.wasm` builds DOOM for PicoDeck's browser demo
+([picodeck.net/try](https://picodeck.net/try/), the PicoDeck/web-sim repo): a
+WebAssembly side module of the same sources, built with Emscripten (`EMSDK`, default
+`~/emsdk`; use the version web-sim pins). `stubs_newlib.c` (the newlib system calls)
+is device-only; `web_exit.c` routes `exit()` back to `picodeck_main`.
+`make web-stage` writes `build-web/doom/` for web-sim's `make test DOOM=<this checkout>`.
+
 ## Release
 
 1. Bump `version` in `app.json`.

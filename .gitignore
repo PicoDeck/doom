@@ -2,3 +2,5 @@ main.elf
 *.debug
 *.o
 *.zip
+main.wasm
+build-web/
