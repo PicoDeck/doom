@@ -25,6 +25,15 @@ jobs:
       - name: Build
         run: make
 
+      - name: Install Emscripten (the version PicoDeck/web-sim pins)
+        run: |
+          git clone --depth 1 --branch 6.0.10 https://github.com/emscripten-core/emsdk.git ~/emsdk
+          ~/emsdk/emsdk install 6.0.10
+          ~/emsdk/emsdk activate 6.0.10
+
+      - name: Browser build (main.wasm, for PicoDeck/web-sim)
+        run: make main.wasm
+
       - name: Package
         run: |
           rm -f picodeck-doom-*.zip
@@ -34,7 +43,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: picodeck-doom
-          path: picodeck-doom-*.zip
+          path: |
+            picodeck-doom-*.zip
+            main.wasm
 
       - name: Check app.json version matches the tag
         if: startsWith(github.ref, 'refs/tags/v')
@@ -50,5 +61,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: picodeck-doom-*.zip
+          files: |
+            picodeck-doom-*.zip
+            main.wasm
           generate_release_notes: true
